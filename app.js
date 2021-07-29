@@ -166,7 +166,6 @@ app.post('/api/courses', (req, res) => {
     await sequelize.sync({ logging: true, force: false });
    
     try {
-      console.log("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
       //newCourseValues = await Course.create({ title: `${req.query.title}`, description: `${req.query.description}`, estimatedTime: `${req.query.estimatedTime}`, materialsNeeded: `${req.query.materialsNeeded}`});
       newCourseValues = await Course.create({ title: "TitleCourse", description: "DescriptionCourse", estimatedTime:"EstimatedTimeCourse", materialsNeeded: "MaterialsNeededCourse"});
     } catch(error) {
