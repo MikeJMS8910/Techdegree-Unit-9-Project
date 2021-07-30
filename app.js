@@ -25,9 +25,63 @@ const app = express();
 // setup morgan which gives us http request logging
 app.use(morgan('dev'));
 
-app.use(bodyParser.urlencoded())
+'use strict';
 
-class User extends Sequelize.Model {} //sets up the user Model
+function authenticateUser(req) { //user authentication function
+  let message = ""
+  const credentials = req.headers;
+  if (credentials.emailaddress) {
+    (async () => {
+      try {
+        const user = await User.findOne({ where: {emailAddress: credentials.emailaddress} });
+        if (user) {
+          const authenticated = bcrypt
+            .compareSync(credentials.password, user.password);
+          if (authenticated) {
+            console.log(`Authentication successful for email address: ${user.emailAddress}`);
+      
+            // Store the user on the Request object.
+            req.currentUser = user;
+          } else {
+            message = `Authentication failure for email address: ${user.emailAddress}`;
+          }
+        } else {
+          message = `User not found for email address: ${credentials.emailaddress}`;
+        }
+      } catch(error){ 
+        console.log("error: "+error)
+      }
+    })();
+  } else {
+    message = 'Auth header not found';
+  }
+
+  if(message !== "") {
+    console.log("returned false")
+    return false
+  } else {
+    console.log("returned true")
+    return true
+  }
+}
+
+// for making sure that an id exists
+function findById(id) {
+  for(let x = 0; x < courseJson.length; x++) {
+    console.log(id)
+    if(courseJson[x].id == id) {
+      console.log("x: "+x)
+      return [true, x]
+    }
+  }
+  return [false]
+}
+
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
+
+let User = class User extends Sequelize.Model {} //sets up the user Model
 User.init({
   firstName: {
     type: Sequelize.STRING, 
@@ -47,12 +101,7 @@ User.init({
   }
 }, { sequelize });
 User.associate = (models) => {
-  User.hasMany(models.Course, {
-    foreignKey: {
-      name: 'id',
-      allowNull: false
-    }
-  });
+  User.hasMany(models.Course);
 };
 
 class Course extends Sequelize.Model {} //sets up the course Model
@@ -103,94 +152,170 @@ refreshValues()
 
 
 // get route to get all of the users
-app.get('/api/users', (req, res, next) => {
-  res.json(userJson)
-  res.sendStatus(200)
+app.get('/api/users',(req, res, next) => {
+  if(authenticateUser(req)) {
+    refreshValues()
+    res.json(userJson)
+    res.sendStatus(200)
+  } else {
+    res.status(401).json({ message: 'Access Denied' });
+  }
 });
 
+// validation wasnt working for some reason so I put it in a function
+function checkValues(from, req) {
+  if(from == "user") {
+    let good = true;
+    let message;
+    if(req.body.firstName == null || req.body.firstName == "") {
+      good = false;
+      message = "first name is empty"
+    } else if(req.body.lastName == null || req.body.lastName == "") {
+      good = false;
+      message = "last name is empty"
+    } else if(req.body.emailAddress == null || req.body.emailAddress == "") {
+      good = false;
+      message = "email address is empty"
+    } else if(req.body.password == null || req.body.password == "") {
+      good = false;
+      message = "password is empty"
+    }
+    return [good, message]
+  } else {
+    let good = true;
+    let message;
+    if(req.body.title == null || req.body.title == "") {
+      good = false;
+      message = "title is empty"
+    } else if(req.body.description == null || req.body.description == "") {
+      good = false;
+      message = "description is empty"
+    }
+    return [good, message]
+  }
+}
+
 // post route to create users
-app.post('/api/users', (req, res) => {
+app.post('/api/users', async (req, res) => {
+  let bodyValues = req.body
   let newUserValues;
-  const plain = req.query.password;
+  const plain = req.body.password;
   const other = 'password';
-  bcrypt.genSalt(10, function(err, salt) {
-    bcrypt.hash(plain , salt, function(err, hash) {
-      (async () => {
-        await sequelize.sync({ logging: true, force: false });
-        
-        try {
-          newUserValues = await User.create({ firstName: `${req.query.firstName}`, lastName: `${req.query.lastName}`, emailAddress: `${req.query.emailAddress}`, password: `${hash}`});
-          refreshValues()
-        } catch(error) {
-  
-        }
-      })();
+  if(checkValues("user", req)[0]) {
+    bcrypt.genSalt(10, function(err, salt) {
+      bcrypt.hash(plain , salt, function(err, hash) {
+        bodyValues.password = hash;
+        (async () => {
+          await sequelize.sync({ logging: true, force: false });
+          
+          try {
+            newUserValues = await User.create(bodyValues);
+            refreshValues()
+          } catch(error) {
+            res.status(500).json({ message: "Error: "+error })
+          }
+        })();
+      });
     });
-  });
-  userJson.push(newUserValues)
-  res.redirect(201, "/")
+    userJson.push(newUserValues)
+    res.redirect(201, "/")
+  } else {
+    res.status(400).json({ message: checkValues("user", req)[1] });
+  }
 });
 
 // gets all courses
 app.get('/api/courses', (req, res) => {
+  refreshValues()
   res.json(courseJson)
   res.status(200)
 });
 
 // gets specific courses
 app.get('/api/courses/:id', (req, res) => {
-  res.json(courseJson.courses[req.params.id - 1])
-  res.status(200)
+  if(findById(req.params.id)[0]) {
+    res.json(courseJson[findById(req.params.id)[1]])
+    res.status(200)
+  } else{
+    res.status(404).json({ message: "The given id does not exsist" })
+  }
 });
 
 //creates courses
-app.post('/api/courses', (req, res) => {
-  /*sequelize.transaction(function(t) {
-    var options = { raw: true, transaction: t }
-  
-    sequelize
-      .query('SET FOREIGN_KEY_CHECKS = 0', null, options)
-      .then(function() {
-        return sequelize.query('truncate table myTable', null, options)
-      })
-      .then(function() {
-        return sequelize.query('SET FOREIGN_KEY_CHECKS = 1', null, options)
-      })
-      .then(function() {
-        return t.commit()
-      })
-  }) */
-  console.log("raw req.query: "+req.query.title)
-  let newCourseValues;
-  (async () => {
-    await sequelize.sync({ logging: true, force: false });
-   
-    try {
-      //newCourseValues = await Course.create({ title: `${req.query.title}`, description: `${req.query.description}`, estimatedTime: `${req.query.estimatedTime}`, materialsNeeded: `${req.query.materialsNeeded}`});
-      newCourseValues = await Course.create({ title: "TitleCourse", description: "DescriptionCourse", estimatedTime:"EstimatedTimeCourse", materialsNeeded: "MaterialsNeededCourse"});
-    } catch(error) {
-      console.log("error"+error)
+app.post('/api/courses',(req, res) => {
+  if(authenticateUser(req)) {
+    let bodyValues = req.body
+    let newCourseValues;
+    console.log("checkValues: "+checkValues("courses", req))
+    if(checkValues("course", req)[0]) {
+      (async () => {
+        await sequelize.sync({ force: false }); 
+        try { 
+            newCourseValues = await Course.create(bodyValues); 
+            refreshValues()
+        } catch(error) {
+          res.status(500).json({ message: 'Error: '+error })
+        }
+      })();
+      userJson.push(newCourseValues)
+      res.redirect(201, "/")
+    } else {
+      res.status(400).json({ message: checkValues("course", req)[1] });
     }
-  })();
-  console.log("newCourseValues"+newCourseValues)
-  refreshValues()
-  courseJson.push(newCourseValues)
-  res.redirect(201, "/")  
+  } else {
+    res.status(401).json({ message: 'Access Denied' });
+  }
 });
 
 // updates courses
-app.put('/api/courses/:id', (req, res) => {
+app.put('/api/courses/:id',(req, res) => {
+  if(authenticateUser(req)) {
+    if(findById(req.params.id)[0]) {
+      let courseToUpdate;
+      let changeId = courseJson[findById(req.params.id)[1]].id;
+      (async () => {
+        await sequelize.sync({ logging: true, force: false });
+   
+        try {
+          console.log("changeId: "+changeId)
+          courseToUpdate = await Course.findByPk(changeId)
+          console.log("course to update: "+courseToUpdate)
+          courseToUpdate.update(req.body)
 
+          refreshValues()
+        } catch(error) {
+          res.status(500).json({ message: "Error: "+error })
+        }
+      })();
+      refreshValues()
+      res.status(204)
+      res.json()
+    } else {
+      res.status(404).json({ message: "The given id does not exsist" })
+    }
+  } else {
+    res.status(401).json({ message: 'Access Denied' });
+  }
 });
 
 // deletes courses
-app.delete('/api/courses/:id', (req, res) => {
-  Course.destroy({
-    where: {
-      id: req.params.id
+app.delete('/api/courses/:id',(req, res) => {
+  if(authenticateUser(req)) {
+    if(findById(req.params.id)[0]) {
+      Course.destroy({
+        where: {
+          id: courseJson[findById(req.params.id)[1]].id
+        }
+      })
+      refreshValues()
+      res.status(204)
+      res.json()
+    } else {
+      res.status(404).json({ message: "The given id does not exsist" })
     }
-  })
-  res.status(204)
+  } else {
+    res.status(401).json({ message: 'Access Denied' });
+  }
 });
 
 // setup a friendly greeting for the root route
