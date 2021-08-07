@@ -1,4 +1,18 @@
 {
+  "users": [
+    {
+      "firstName": "Joe",
+      "lastName": "Smith",
+      "emailAddress": "joe@smith.com",
+      "password": "joepassword"
+    },
+    {
+      "firstName": "Sally",
+      "lastName": "Jones",
+      "emailAddress": "sally@jones.com",
+      "password": "sallypassword"
+    }
+  ],
   "courses": [
     {
       "userId": 1,
@@ -18,13 +32,6 @@
       "userId": 2,
       "title": "Learn How to Test Programs",
       "description": "In this course, you'll learn how to test programs."
-    },
-    {
-      "userId": 1,
-      "title": "Debugging 101",
-      "description": "An introduction to testing and debugging your code.",
-      "estimatedTime": "4 hours",
-      "materialsNeeded": "* Notebook computer running Mac OS X or Windows\n* Text editor"
     }
   ]
 }
