@@ -165,7 +165,7 @@ router.put('/courses/:id', authenticateUser,
             }).then (updatedCourse => {
                 if(updatedCourse !== null && typeof(updatedCourse) !=='undefined' && updatedCourse.length > 0) {
                     if(updatedCourse[0] > 0) {
-                        res.status(200);
+                        res.status(204);
                         res.header('location', `/course/${req.params.id}`);
                         res.json({"message": 'Course updated successfully!'})
                     }
@@ -205,7 +205,7 @@ router.delete('/courses/:id', authenticateUser,
                 }
             }).then(function(rowDeleted) {
                 if(rowDeleted === 1){
-                    res.status(200)
+                    res.status(204)
                     res.header('location', `/`);
                  } else {
                     res.status(403)
