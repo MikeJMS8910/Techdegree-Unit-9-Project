@@ -152,7 +152,6 @@ router.post('/courses', authenticateUser,
         
     })
 );
-
 //update course route
 router.put('/courses/:id', authenticateUser,
     asyncHandler(async(req, res) => {
